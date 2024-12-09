@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minesweeper</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            background-color: #111;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            padding: 10px 20px;
+            background-color: #868686;
+            color: white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+
+        nav {
+            margin-left: auto; /* Pushes links to the far right */
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            font-size: 1em;
+            margin-left: 15px;
+            transition: color 0.2s;
+        }
+
+        nav a:hover {
+            color: #FFD700;
+        }
+
+        #gameBoard {
+            display: grid;
+            gap: 2px;
+            background-color: #333;
+            border: 2px solid white;
+        }
+
+        .tile {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #666;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .tile.revealed {
+            background-color: #999;
+            cursor: default;
+        }
+
+        .tile.flagged {
+            background-color: #FFD700;
+        }
+
+        .tile.explosion {
+            animation: explosion 0.5s ease-out;
+            background-color: red !important;
+            color: white;
+        }
+
+        @keyframes explosion {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.5); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        #restartBtn {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            background-color: limegreen;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        #restartBtn:hover {
+            background-color: green;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Minesweeper</h1>
+        <nav>
+            <a href="../../index.html">Home</a>
+            <a href="../../resume.html">Resume</a>
+            <a href="Milwaukee.Html">My Strange Addiction: Tools</a>
+        </nav>
+    </header>
+    <div id="gameBoard"></div>
+    <button id="restartBtn">Restart Game</button>
+    <script>
+        const boardSize = 10;
+        const bombCount = 15;
+        const gameBoard = document.getElementById('gameBoard');
+        const restartBtn = document.getElementById('restartBtn');
+        let board, gameOver;
+
+        function initGame() {
+            gameBoard.style.gridTemplateColumns = `repeat(${boardSize}, 30px)`;
+            gameBoard.style.gridTemplateRows = `repeat(${boardSize}, 30px)`;
+            board = [];
+            gameOver = false;
+            gameBoard.innerHTML = '';
+            generateBoard();
+        }
+
+        function generateBoard() {
+            for (let i = 0; i < boardSize; i++) {
+                board[i] = [];
+                for (let j = 0; j < boardSize; j++) {
+                    board[i][j] = { bomb: false, revealed: false, flagged: false, adjacent: 0 };
+                    const tile = document.createElement('div');
+                    tile.classList.add('tile');
+                    tile.dataset.row = i;
+                    tile.dataset.col = j;
+                    gameBoard.appendChild(tile);
+                }
+            }
+
+            let placedBombs = 0;
+            while (placedBombs < bombCount) {
+                const row = Math.floor(Math.random() * boardSize);
+                const col = Math.floor(Math.random() * boardSize);
+                if (!board[row][col].bomb) {
+                    board[row][col].bomb = true;
+                    placedBombs++;
+                    updateAdjacentCounts(row, col);
+                }
+            }
+
+            document.querySelectorAll('.tile').forEach(tile => {
+                tile.addEventListener('click', handleLeftClick);
+                tile.addEventListener('contextmenu', handleRightClick);
+            });
+        }
+
+        function updateAdjacentCounts(row, col) {
+            for (let i = -1; i <= 1; i++) {
+                for (let j = -1; j <= 1; j++) {
+                    const r = row + i;
+                    const c = col + j;
+                    if (isInBounds(r, c) && !board[r][c].bomb) {
+                        board[r][c].adjacent++;
+                    }
+                }
+            }
+        }
+
+        function isInBounds(row, col) {
+            return row >= 0 && col >= 0 && row < boardSize && col < boardSize;
+        }
+
+        function handleLeftClick(event) {
+            if (gameOver) return;
+            const row = parseInt(event.target.dataset.row);
+            const col = parseInt(event.target.dataset.col);
+            revealTile(row, col);
+            checkWin();
+        }
+
+        function handleRightClick(event) {
+            event.preventDefault();
+            if (gameOver) return;
+            const row = parseInt(event.target.dataset.row);
+            const col = parseInt(event.target.dataset.col);
+            const tile = board[row][col];
+            if (!tile.revealed) {
+                tile.flagged = !tile.flagged;
+                const domTile = getTileElement(row, col);
+                domTile.classList.toggle('flagged', tile.flagged);
+            }
+        }
+
+        function revealTile(row, col) {
+            if (!isInBounds(row, col) || board[row][col].revealed || board[row][col].flagged) return;
+            const tile = board[row][col];
+            tile.revealed = true;
+            const domTile = getTileElement(row, col);
+            domTile.classList.add('revealed');
+            if (tile.bomb) {
+                domTile.textContent = '💣';
+                domTile.classList.add('explosion');
+                gameOver = true;
+                setTimeout(() => alert('Game Over! You hit a bomb.'), 500);
+                revealAllBombs();
+            } else {
+                domTile.textContent = tile.adjacent || '';
+                if (tile.adjacent === 0) {
+                    for (let i = -1; i <= 1; i++) {
+                        for (let j = -1; j <= 1; j++) {
+                            revealTile(row + i, col + j);
+                        }
+                    }
+                }
+            }
+        }
+
+        function revealAllBombs() {
+            for (let i = 0; i < boardSize; i++) {
+                for (let j = 0; j < boardSize; j++) {
+                    if (board[i][j].bomb) {
+                        const domTile = getTileElement(i, j);
+                        domTile.classList.add('revealed');
+                        domTile.textContent = '💣';
+                    }
+                }
+            }
+        }
+
+        function checkWin() {
+            const unrevealedTiles = board.flat().filter(tile => !tile.revealed && !tile.bomb);
+            if (unrevealedTiles.length === 0) {
+                gameOver = true;
+                alert('Congratulations! You cleared the board.');
+            }
+        }
+
+        function getTileElement(row, col) {
+            return document.querySelector(`.tile[data-row="${row}"][data-col="${col}"]`);
+        }
+
+        restartBtn.addEventListener('click', initGame);
+
+        initGame();
+    </script>
+</body>
+</html>
